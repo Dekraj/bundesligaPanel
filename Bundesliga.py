@@ -59,7 +59,7 @@ def getNextMatch():
     monday_iso = monday_at_9.strftime("%Y-%m-%dT%H:%M:%SZ")    
     #return first gamedate found after this weeks monday
     for row in filtered:
-        if row["matchDateTimeUTC"] > monday_iso:
+        if row["matchDateTimeUTC"] > monday_iso:      
             return row
 
 def getMatchOfGameday(gameday):
@@ -67,11 +67,12 @@ def getMatchOfGameday(gameday):
     filtered = [row for row in data if row["team1"]["teamId"] == my_team_id or row["team2"]["teamId"] == my_team_id]
     return filtered
 
-def make_text_img(text, font, font_color):
+def make_text_img(text, font, font_color, padding = [0,0,0,0]):
+    top, right, bottom, left = padding
     x,y,width,height = font.getbbox(text) 
-    text_img = Image.new("RGB", (int(width), int(height)),(0,0,0)) 
+    text_img = Image.new("RGB", (int(width + right + left), int(height + top + bottom)),(0,0,0)) 
     draw = ImageDraw.Draw(text_img) 
-    draw.text((0,0),text, font=font, fill=font_color) 
+    draw.text((left,top),text, font=font, fill=font_color) 
     return text_img
 
 def generate_overtime():
@@ -215,20 +216,23 @@ class Scoreboard:
         clearBoard()
         # Fetch data of next game
         match_gametime = self.next_game_time.strftime("%H:%M")
-        # If the game is not this week then show the date instead of a weekday
-        if(self.time_now_de + timedelta(days=7) >= self.next_game_time):
-            match_gamedate = wochentage[date_object.weekday()]
-        else:
-            match_gamedate = date_object.strftime("%d.%m.%y")
+        self.gametime_img = make_text_img(match_gametime, font_medium, font_white, [0,0,1,0])
 
-        self.gametime_img = make_text_img(match_gametime, font_medium, font_white)
-        self.gamedate_img = make_text_img(match_gamedate, font_small, font_white)
+        # If the game is not this week then show the date instead of a weekday
+        when_is_game = ""
+        if(self.time_now_de + timedelta(days=7) >= self.next_game_time):
+            when_is_game = wochentage[self.next_game_time.weekday()]
+        else:
+            when_is_game = self.next_game_time.strftime("%d.%m.%y")
+
+        self.gamedate_img = make_text_img(when_is_game, font_small, font_white, [0,0,3,0])
+        
         self.data_loaded = True
 
         delay_to_gamestart = (self.next_game_time - self.time_now_de).total_seconds()
-        if delay < 0:
-            delay = 0
-        Timer(delay, self.show_game_life).start()
+        if delay_to_gamestart < 0:
+            deldelay_to_gamestartay = 0
+        Timer(delay_to_gamestart, self.show_game_live).start()
 
     def fetch_team_logos(self):
           # get home team logo from url
