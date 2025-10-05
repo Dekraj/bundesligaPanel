@@ -27,11 +27,8 @@ total_height_LEDboard = 32
 logo_visible_amount = 0.3
 max_pixel_width_logos = int(total_width_LEDboard * 0.3)
 
-# tune these parameters as you like, the second value is the font size
-
 font_medium = ImageFont.truetype("arial.ttf", 12)
 font_small = ImageFont.truetype("arial.ttf", 10)
-
 font_white = (255,255,255)
 
 wochentage = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
@@ -82,7 +79,7 @@ def generate_overtime():
     # so we guess the overtime
     over_time_minutes = [1,2,3,4,5,6,7] 
     weights = [0.03, 0.22, 0.25, 0.22, 0.17, 0.1, 0.01]
-    over_time = random.choices(over_time_minutes, weights=weights   , k=1)[0]
+    over_time = random.choices(over_time_minutes, weights=weights, k=1)[0]
     return over_time 
 
 
@@ -147,11 +144,10 @@ class Scoreboard:
         self.data_loaded = False
         clearBoard()
         #Live spiel anzeigen
-        print("in game live ohno")
-
         self.broker = BrokerClient("openligadb/bl1/2025/" + self.game_day, self.on_broker_message)
         self.broker.start()
-        self.start_timer();
+        self.start_timer()
+        self.data_loaded = True
 
 
     def on_broker_message(self, client, userdata, msg):
@@ -168,7 +164,7 @@ class Scoreboard:
 
 
     def start_timer(self):
-        minutes_since_start =  int((self.time_now_de - self.next_game_time).total_seconds() // 60 + 1)
+        minutes_since_start = int((self.time_now_de - self.next_game_time).total_seconds() // 60 + 1)
         guessed_overtime = generate_overtime()
 
         for i in range(minutes_since_start, 45 + guessed_overtime + 15 + 45):
@@ -191,10 +187,6 @@ class Scoreboard:
     def update_time(self, current_minute):
         self.current_time_img = make_text_img(str(current_minute), font_medium, font_white)
 
-
-
-
-
     def show_game_over(self):
         self.state="game_over"
         self.data_loaded = False
@@ -205,11 +197,7 @@ class Scoreboard:
         away_goals = end_game_data[0]["matchResults"][1]["pointsTeam2"]
         score = str(home_goals) + " - " + str(away_goals)
 
-        x,y,width,height = font_medium.getbbox(score)
-        self.score_img = Image.new("RGB", (int(width), int(height)), (0,0,0))
-        draw = ImageDraw.Draw(self.score_img)
-        draw.text((0,0), score, font=font_medium, fill=font_white)
-        self.score_img.save("score.png")
+        self.score_img = make_text_img(score, font_medium, font_white)
         self.data_loaded = True
 
         days_until_monday = (0 - self.time_now_de.weekday()) % 7
@@ -229,24 +217,12 @@ class Scoreboard:
         match_gametime = self.next_game_time.strftime("%H:%M")
         # If the game is not this week then show the date instead of a weekday
         if(self.time_now_de + timedelta(days=7) >= self.next_game_time):
-            # Show Weekday
             match_gamedate = wochentage[date_object.weekday()]
         else:
-            # Show Date
             match_gamedate = date_object.strftime("%d.%m.%y")
 
-        x_gt,y_gt,width_gt,height_gt = font_medium.getbbox(match_gametime)
-        self.gametime_img = Image.new("RGB", (int(width_gt), int(height_gt)),(0,0,0))
-        draw = ImageDraw.Draw(self.gametime_img)
-        draw.text((0,0), match_gametime,font=font_medium, fill=font_white)
-        self.gametime_img.save("gametime.png")
-
-        x_gd,y_gd,width_gd,height_gd = font_small.getbbox(match_gamedate)
-        self.gamedate_img = Image.new("RGB", (int(width_gd), int(height_gd)), (0,0,0))
-        draw = ImageDraw.Draw(self.gamedate_img)
-        draw.text((0,0), match_gamedate, font=font_small, fill=font_white)
-        self.gamedate_img.save("gamedate.png")
-
+        self.gametime_img = make_text_img(match_gametime, font_medium, font_white)
+        self.gamedate_img = make_text_img(match_gamedate, font_small, font_white)
         self.data_loaded = True
 
         delay_to_gamestart = (self.next_game_time - self.time_now_de).total_seconds()
@@ -277,13 +253,6 @@ class Scoreboard:
 
 scoreboard = Scoreboard()
 
-# Current matchscore holen -> filtered[goals][...]
-# 
-# filtered[matchIsFinished]
-# filtered[matchDateTimeUTC]
-# Wie schauen ob in Overtime vor halbzeit?
-# matchResult[0] -> Stand bei Halbzeit
-
 while True:
 
     if(scoreboard.data_loaded):
@@ -301,23 +270,10 @@ while True:
             print("in game_live")
 
         else:
-            canvas.paste(scoreboard.score_img, ((total_width_LEDboard - scoreboard.score_img.size[0]) // 2 , int(total_height_LEDboard * 0.5)))
-
-        # canvas.paste(text_img_sz, (18 + ((28 - int(text_width_sz))// 2), total_height_LEDboard//2 - 15))
-        # canvas.paste(text_img, (18 - 1 + ((28 - int(text_width))// 2), total_height_LEDboard//2))
+            canvas.paste(scoreboard.score_img, ((total_width_LEDboard - scoreboard.score_img.size[0] -1) // 2 , int((total_height_LEDboard - scoreboard.score_img.size[1]) // 2)))
         
         framebuffer[:] = np.asarray(canvas)
         matrix.show();
-
-
-
-
-# IDEE:
-# Bei next game day: Wenn diese Woche dann Wochentag anzeigen (Sonntag)
-# Wenn nicht diese Woche dann Datum anzeigen (20.10.25)
-#
-#
-#
 
 
 # Das nächste anstehende Spiel des als Parameter zu übergebenden Teams der ebenfalls zu übergebenen Liga:
@@ -334,12 +290,3 @@ while True:
 #
 #Zur Abfrage eines spezifischen Ergebnistyps wird empfohlen, die "resultTypeID" zu verwenden und damit unabhängig von der Reihenfolge der matchResults-Elemente zu sein.
 #
-#
-#
-#
-#
-#
-#
-# Immer am Montag: Hole von der API wann das nächste spiel ist.
-# Wenn Spiel anfängt: Zeige spielstand an
-# Wenn spiel vorbei: Zeige Endstand an bis Montag
