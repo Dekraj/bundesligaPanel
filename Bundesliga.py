@@ -1,13 +1,17 @@
 import numpy as np
 import requests
 from PIL import Image, ImageDraw, ImageFont
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, time, timezone, timedelta
+import time as t
 from zoneinfo import ZoneInfo
 from io import BytesIO
 from threading import Timer
 import paho.mqtt.client as mqtt
 import adafruit_blinka_raspberry_pi5_piomatter as piomatter
 import random
+import json
+import threading
+import asyncio
 
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
@@ -50,7 +54,8 @@ def clearBoard():
     framebuffer[:] = np.asarray(canvas)                         
 
 def getNextMatch():
-    data = requests.get("https://api.openligadb.de/getmatchdata/bl1/2025/").json();
+    # data = requests.get("https://api.openligadb.de/getmatchdata/bl1/2025/").json();
+    data = requests.get("https://api.openligadb.de/getmatchdata/25testmqtt/2025/").json();
     filtered = [row for row in data if row["team1"]["teamId"] == my_team_id or row["team2"]["teamId"] == my_team_id]
     now = datetime.now(timezone.utc)
     days_since_monday = now.weekday()
@@ -63,7 +68,8 @@ def getNextMatch():
             return row
 
 def getMatchOfGameday(gameday):
-    data = requests.get('https://api.openligadb.de/getmatchdata/bl1/2025/'+ str(gameday)).json();
+    # data = requests.get('https://api.openligadb.de/getmatchdata/bl1/2025/'+ str(gameday)).json();
+    data = requests.get('https://api.openligadb.de/getmatchdata/25testmqtt/2025/'+ str(gameday)).json();
     filtered = [row for row in data if row["team1"]["teamId"] == my_team_id or row["team2"]["teamId"] == my_team_id]
     return filtered
 
@@ -125,7 +131,7 @@ class Scoreboard:
         self.data_loaded = False
         self.broker = None
         self.fetch_team_logos()
-
+    
         if(self.next_game_time > self.time_now_de):
             self.game_finished = False
             self.show_wait_next_game()
@@ -145,45 +151,60 @@ class Scoreboard:
         self.data_loaded = False
         clearBoard()
         #Live spiel anzeigen
-        self.broker = BrokerClient("openligadb/bl1/2025/" + self.game_day, self.on_broker_message)
+        # self.broker = BrokerClient("openligadb/bl1/2025/" + self.game_day, self.on_broker_message)
+        home_goals = self.nextMatch["matchResults"][1]["pointsTeam1"]
+        away_goals = self.nextMatch["matchResults"][1]["pointsTeam2"]
+        self.update_score(home_goals,away_goals)
+        self.broker = BrokerClient("openligadb/25testmqtt/2025/"+ str(self.game_day), self.on_broker_message)
         self.broker.start()
-        self.start_timer()
+        self.update_time(1)
+        threading.Thread(target=self.start_async_timer).start()
         self.data_loaded = True
-
-
+        
+    
     def on_broker_message(self, client, userdata, msg):
-        print("Neue Daten:", msg.topic, msg.payload.decode())
-
+        print("BROKER MESSAGE")
+        message = msg.payload.decode()
+        data = json.loads(message)
+        if data["Team1"]["TeamId"] != my_team_id and data["Team2"]["TeamId"] != my_team_id:
+            return
+        filtered = [data]
+        home_goals = filtered[0]["MatchResults"][1]["PointsTeam1"]
+        away_goals = filtered[0]["MatchResults"][1]["PointsTeam2"]
+        self.update_score(home_goals, away_goals)
+        self.game_finished = filtered[0]["MatchIsFinished"]
 
     def stop_game(self):
         if self.broker:
             self.broker.stop()
 
-    def update_score(self):
-        score = str(self.home_goals) + " - " + str(self.away_goals) 
+    def update_score(self, home_goals, away_goals):
+        score = str(home_goals) + " - " + str(away_goals) 
         self.score_img = make_text_img(score, font_small, font_white)
 
+    def start_async_timer(self):
+        asyncio.run(self.start_timer())
 
-    def start_timer(self):
+    async def start_timer(self):
         minutes_since_start = int((self.time_now_de - self.next_game_time).total_seconds() // 60 + 1)
         guessed_overtime = generate_overtime()
 
         for i in range(minutes_since_start, 45 + guessed_overtime + 15 + 45):
-            if(i< 46):
-                self.update_time(str(i+1))
-            if(46 <= i < 46 + guessed_overtime):
-                self.update_time("45 + " + str(i - 45))
-            if(46 + guessed_overtime <= i < 46 + guessed_overtime + 15):
+            if(i< 45):
+                self.update_time(str(i+1) +"'")
+            if(45 <= i < 45 + guessed_overtime):
+                self.update_time("45+" + str(i - 45)+"'")
+            if(45 + guessed_overtime <= i < 45 + guessed_overtime + 15):
                 self.update_time("Pause")
-            if(46 + guessed_overtime + 15 <= i <= 46 + guessed_overtime + 15 + 45):
-                self.update_time(str(i - guessed_overtime - 15))
-            time.sleep(60)
+            if(45 + guessed_overtime + 15 <= i <= 45 + guessed_overtime + 15 + 45):
+                self.update_time(str(i - guessed_overtime - 15)+"'")   
+            await asyncio.sleep(60) 
 
         overtime = 1
         while(self.game_finished == False):
-            self.update_time("90 + " + str(overtime))
+            self.update_time("90+" + str(overtime)+ "'")
             overtime += 1
-            time.sleep(60)
+            await asyncio.sleep(60) 
 
     def update_time(self, current_minute):
         self.current_time_img = make_text_img(str(current_minute), font_medium, font_white)
@@ -271,13 +292,13 @@ while True:
 
         elif(scoreboard.state == "game_live"):
             canvas.paste(scoreboard.current_time_img, ((total_width_LEDboard - scoreboard.current_time_img.size[0]) // 2, int(total_height_LEDboard * 0.01)))
-            print("in game_live")
+            canvas.paste(scoreboard.score_img,((total_width_LEDboard - scoreboard.score_img.size[0]) // 2, int(total_height_LEDboard * 0.5)))
 
         else:
             canvas.paste(scoreboard.score_img, ((total_width_LEDboard - scoreboard.score_img.size[0] -1) // 2 , int((total_height_LEDboard - scoreboard.score_img.size[1]) // 2)))
         
         framebuffer[:] = np.asarray(canvas)
-        matrix.show();
+        matrix.show()
 
 
 # Das nächste anstehende Spiel des als Parameter zu übergebenden Teams der ebenfalls zu übergebenen Liga:
