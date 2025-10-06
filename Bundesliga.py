@@ -197,19 +197,19 @@ class Scoreboard:
             if(i< 45):
                 self.update_time(str(i+1) +"'")
             if(45 <= i < 45 + guessed_overtime):
-                self.update_time("45+" + str(i - 45)+"'")
+                self.update_time("45+" + str(i - 45 + 1)+"'")
             if(45 + guessed_overtime <= i < 45 + guessed_overtime + 15):
                 self.update_time("Pause")
             if(45 + guessed_overtime + 15 <= i <= 46 + guessed_overtime + 15 + 45):
                 clearBoard()
-                self.update_time(str(i - guessed_overtime - 15)+"'")   
-            await asyncio.sleep(2) 
+                self.update_time(str(i - guessed_overtime - 15 + 1)+"'")   
+            await asyncio.sleep(60) 
 
         overtime = 1
         while(self.game_finished == False):
             self.update_time("90+" + str(overtime)+ "'")
             overtime += 1
-            await asyncio.sleep(2)
+            await asyncio.sleep(60)
         self.game_ended()
     def game_ended(self):
         self.stop_broker()
