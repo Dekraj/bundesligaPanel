@@ -8,8 +8,9 @@ import asyncio
 import threading
 from threading import Timer
 import json
-from utils.utility_functions import getNextMatch, clearBoard, make_text_img, generate_overtime, getMatchOfGameday
+from utils.utility_functions import getNextMatch, clearBoard, make_text_img, generate_overtime, getMatchOfGameday, load_team_logo
 from configs import config
+
 
 class Scoreboard:
     def __init__(self):
@@ -48,7 +49,8 @@ class Scoreboard:
         self.data_loaded = False
         clearBoard()
         #Live spiel anzeigen
-        # self.broker = BrokerClient("openligadb/bl1/2025/" + self.game_day, self.on_broker_message)
+        self.broker = BrokerClient("openligadb/bl1/2025/" + self.game_day, self.on_broker_message)
+        # self.broker = BrokerClient("openligadb/25testmqtt/2025/"+ str(self.game_day), self.on_broker_message)
         home_goals =(self.nextMatch.get("matchResults", [{}])[1].get("pointsTeam1", 0)
                      if len(self.nextMatch.get("matchResults", [])) > 1
                      else 0)
@@ -57,7 +59,6 @@ class Scoreboard:
                      else 0)
 
         self.update_score(home_goals,away_goals)
-        self.broker = BrokerClient("openligadb/25testmqtt/2025/"+ str(self.game_day), self.on_broker_message)
         self.broker.start()
         self.update_time(1)
         threading.Thread(target=self.start_async_timer).start()
@@ -146,7 +147,7 @@ class Scoreboard:
         self.gametime_img = make_text_img(match_gametime, config.font_medium, config.font_white, [0,0,1,0])
 
         # If the game is not this week then show the date instead of a weekday
-        when_is_game = ""
+        when_is_game = None
         if(self.time_now_de + timedelta(days=7) >= self.next_game_time):
             when_is_game = config.wochentage[self.next_game_time.weekday()]
         else:
@@ -163,8 +164,8 @@ class Scoreboard:
 
     def fetch_team_logos(self):
           # get home team logo from url
-        home_team_response = requests.get(self.next_home_team_url, headers=config.headers)
-        home_team_logo_not_scaled = Image.open(BytesIO(home_team_response.content))
+        # home_team_response = requests.get(self.next_home_team_url, headers=config.headers)
+        home_team_logo_not_scaled = load_team_logo(self.next_home_team_url)
         # resize logo so that it fits the LEDboard perfectly
         original_width_home, original_height_home = home_team_logo_not_scaled.size
         new_width_home = int( original_width_home * ( config.total_height_LEDboard / original_height_home))
@@ -172,9 +173,7 @@ class Scoreboard:
         self.home_team_logo = home_team_logo_scaled.crop((new_width_home - config.max_pixel_width_logos,0,new_width_home, config.total_height_LEDboard))
 
         # get away team logo from url
-        away_team_response = requests.get(self.next_away_team_url, headers=config.headers)
-    
-        away_team_logo_not_scaled = Image.open(BytesIO(away_team_response.content))
+        away_team_logo_not_scaled = load_team_logo(self.next_away_team_url)
         # resize logo so that it fits the LEDboard perfectly
         original_width_away, original_height_away = away_team_logo_not_scaled.size
         new_width_away = int(original_width_away * (config.total_height_LEDboard / original_height_away))

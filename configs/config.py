@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image
 
 # 16 = VfB Stuttgart
-my_team_id = 16
+my_team_id = 40
 
 # 128px for 2x1 matrices. Change to 64 if you're using a single matrix.
 total_width_LEDboard = 64

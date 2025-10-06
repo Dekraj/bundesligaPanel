@@ -2,7 +2,12 @@ import numpy as np
 import adafruit_blinka_raspberry_pi5_piomatter as piomatter
 from classes.Scoreboard import Scoreboard
 from configs import config
-# LED Board init
+
+#
+# To display the gameplan of your team
+# change the team_id in config.py
+# the team_id can be found on https://www.openligadb.de/
+#
 
 geometry = piomatter.Geometry(width=config.total_width_LEDboard, height=config.total_height_LEDboard,
                               n_addr_lines=4, rotation=piomatter.Orientation.Normal)

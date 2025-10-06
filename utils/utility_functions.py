@@ -4,6 +4,9 @@ from datetime import datetime, timezone, timedelta
 from PIL import Image, ImageDraw
 import random
 from configs import config
+from io import BytesIO
+from wand.image import Image as WandImage
+from wand.color import Color
 
 def clearBoard():
     config.canvas.paste((0,0,0), [0,0,config.canvas.width, config.canvas.height])
@@ -44,3 +47,20 @@ def generate_overtime():
     weights = [0.03, 0.22, 0.25, 0.22, 0.17, 0.1, 0.01]
     over_time = random.choices(over_time_minutes, weights=weights, k=1)[0]
     return over_time 
+
+def svg_to_png(svg_bytes):
+    with WandImage(blob=svg_bytes, format='svg') as wand_img:
+        
+        wand_img.background_color = 'transparent'  # Wichtig: transparent
+        wand_img.alpha_channel = 'activate'  
+        png_bytes = wand_img.make_blob(format='png')
+    pil_img = Image.open(BytesIO(png_bytes))
+
+    return pil_img
+
+def load_team_logo(url):
+    response = requests.get(url, headers=config.headers)    
+    if url.lower().endswith(".svg"):
+        return svg_to_png(response.content)
+    else:
+        return Image.open(BytesIO(response.content))
