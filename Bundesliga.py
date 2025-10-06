@@ -99,7 +99,7 @@ class BrokerClient:
         self.topic = topic
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
-            client.subscribe(self.topic)
+            client.subscribe(self.topic)    
         else:
             print("Connecting error to the broker", rc)
     def start(self):
@@ -152,18 +152,22 @@ class Scoreboard:
         clearBoard()
         #Live spiel anzeigen
         # self.broker = BrokerClient("openligadb/bl1/2025/" + self.game_day, self.on_broker_message)
-        home_goals = self.nextMatch["matchResults"][1]["pointsTeam1"]
-        away_goals = self.nextMatch["matchResults"][1]["pointsTeam2"]
+        print(self.nextMatch)
+        home_goals =(self.nextMatch.get("matchResults", [{}])[1].get("pointsTeam1", 0)
+                     if len(self.nextMatch.get("matchResults", [])) > 1
+                     else 0)
+        away_goals =(self.nextMatch.get("matchResults", [{}])[1].get("pointsTeam2", 0)
+                     if len(self.nextMatch.get("matchResults", [])) > 1
+                     else 0)
+
         self.update_score(home_goals,away_goals)
         self.broker = BrokerClient("openligadb/25testmqtt/2025/"+ str(self.game_day), self.on_broker_message)
         self.broker.start()
         self.update_time(1)
         threading.Thread(target=self.start_async_timer).start()
         self.data_loaded = True
-        
     
     def on_broker_message(self, client, userdata, msg):
-        print("BROKER MESSAGE")
         message = msg.payload.decode()
         data = json.loads(message)
         if data["Team1"]["TeamId"] != my_team_id and data["Team2"]["TeamId"] != my_team_id:
@@ -174,7 +178,7 @@ class Scoreboard:
         self.update_score(home_goals, away_goals)
         self.game_finished = filtered[0]["MatchIsFinished"]
 
-    def stop_game(self):
+    def stop_broker(self):
         if self.broker:
             self.broker.stop()
 
@@ -196,15 +200,20 @@ class Scoreboard:
                 self.update_time("45+" + str(i - 45)+"'")
             if(45 + guessed_overtime <= i < 45 + guessed_overtime + 15):
                 self.update_time("Pause")
-            if(45 + guessed_overtime + 15 <= i <= 45 + guessed_overtime + 15 + 45):
+            if(45 + guessed_overtime + 15 <= i <= 46 + guessed_overtime + 15 + 45):
+                clearBoard()
                 self.update_time(str(i - guessed_overtime - 15)+"'")   
-            await asyncio.sleep(60) 
+            await asyncio.sleep(2) 
 
         overtime = 1
         while(self.game_finished == False):
             self.update_time("90+" + str(overtime)+ "'")
             overtime += 1
-            await asyncio.sleep(60) 
+            await asyncio.sleep(2)
+        self.game_ended()
+    def game_ended(self):
+        self.stop_broker()
+        self.show_game_over()
 
     def update_time(self, current_minute):
         self.current_time_img = make_text_img(str(current_minute), font_medium, font_white)
